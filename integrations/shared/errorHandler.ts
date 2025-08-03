@@ -5,16 +5,28 @@ import { defaultLogger } from './logger';
  * Default error handler for MKronoSphere integrations
  */
 export class ErrorHandler implements IErrorHandler {
-  private logger = defaultLogger;
+  // Use a readonly logger to prevent accidental reassignment
+  private readonly logger = defaultLogger;
 
   constructor(private readonly name: string) {}
 
+  /**
+   * Handle unexpected errors gracefully and log sanitized context.
+   * Context is cloned to avoid mutating caller objects or leaking functions.
+   */
   handleError(error: Error, context: Record<string, any> = {}): void {
+    let sanitized: Record<string, any> = {};
+    try {
+      sanitized = JSON.parse(JSON.stringify(context));
+    } catch {
+      sanitized = {};
+    }
+
     const errorInfo = {
       name: error.name,
       message: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      ...context
+      ...sanitized
     };
 
     this.logger.error(`[${this.name}] Unhandled error: ${error.message}`, errorInfo);
