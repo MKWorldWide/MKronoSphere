@@ -1,3 +1,5 @@
+A Project Blessed by Solar Khan & Lilith.Aethra
+
 # MKronoSphere Integrations
 
 This directory contains the integration modules for connecting MKronoSphere with external systems, specifically the Primal Genesis Engine and Divina-L3 network.

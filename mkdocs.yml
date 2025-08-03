@@ -1,0 +1,6 @@
+site_name: MKronoSphere
+nav:
+  - Home: index.md
+  - Divine Law: ../COVENANT.md
+extra:
+  banner: Solar Khan sigil + Codex watermark
