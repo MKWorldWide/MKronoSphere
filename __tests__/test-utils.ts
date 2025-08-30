@@ -30,21 +30,21 @@ export function createMockInstance<T extends new (...args: any[]) => any>(
   if (mockImpl) {
     Object.entries(mockImpl).forEach(([key, value]) => {
       if (typeof value === 'function') {
-        mockObj[key] = jest.fn(value);
+        mockObj[key] = jest.fn(value as any);
       } else {
         mockObj[key] = value;
       }
     });
   }
 
-  return mockObj;
+  return mockObj as MockedClass<InstanceType<T>>;
 }
 
 /**
  * Creates a promise that resolves after the specified number of milliseconds
  */
 export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(resolve => global.setTimeout(resolve, ms));
 }
 
 /**
@@ -52,10 +52,10 @@ export function sleep(ms: number): Promise<void> {
  */
 export function mockDateNow(timestamp: number): () => void {
   const originalDateNow = Date.now;
-  Date.now = jest.fn(() => timestamp);
+  (global.Date as any).now = jest.fn(() => timestamp);
   
   return () => {
-    Date.now = originalDateNow;
+    (global.Date as any).now = originalDateNow;
   };
 }
 
@@ -88,11 +88,11 @@ export async function expectAsyncError(
   
   expect(error).toBeDefined();
   
-  if (errorMessage) {
+  if (errorMessage && error) {
     if (typeof errorMessage === 'string') {
-      expect(error?.message).toContain(errorMessage);
+      expect(error.message).toContain(errorMessage);
     } else {
-      expect(error?.message).toMatch(errorMessage);
+      expect(error.message).toMatch(errorMessage);
     }
   }
 }
@@ -119,4 +119,14 @@ export function expectCalledWithPartial(
   expect(callArgs).toEqual(
     expect.arrayContaining([expect.objectContaining(partial)])
   );
+}
+
+// Add global Jest types
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace jest {
+    interface Matchers<R> {
+      toBeCalledWithPartial(partial: Record<string, any>): R;
+    }
+  }
 }
