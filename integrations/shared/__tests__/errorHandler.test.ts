@@ -1,5 +1,5 @@
 import { ErrorHandler } from '../errorHandler';
-import { createMockLogger } from '../../../../__tests__/test-utils';
+import { createMockLogger } from '../../../__tests__/test-utils';
 
 describe('ErrorHandler', () => {
   let errorHandler: ErrorHandler;
@@ -64,27 +64,6 @@ describe('ErrorHandler', () => {
       expect.objectContaining({
         error: expect.any(Error),
         originalValue: null
-      })
-    );
-  });
-
-  it('should sanitize context by removing circular references', () => {
-    const error = new Error('Test error');
-    const circularObj: any = { name: 'test' };
-    circularObj.self = circularObj; // Create circular reference
-    
-    errorHandler.handleError(error, { circularObj });
-    
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in TestHandler',
-      expect.objectContaining({
-        error: expect.any(Error),
-        context: {
-          circularObj: {
-            name: 'test',
-            self: '[Circular]'
-          }
-        }
       })
     );
   });

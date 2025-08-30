@@ -6,6 +6,15 @@ type MockedClass<T> = {
   [K in keyof T]: T[K] extends (...args: any[]) => any ? jest.Mock : T[K];
 };
 
+// Enhanced Logger type for testing
+interface MockLogger extends Logger {
+  debug: jest.Mock;
+  info: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+  child?: jest.Mock;
+}
+
 /**
  * Creates a mock implementation for all methods of a class
  */
@@ -42,6 +51,23 @@ export function createMockInstance<T extends new (...args: any[]) => any>(
 }
 
 /**
+ * Creates a mock logger for testing
+ */
+export function createMockLogger(): MockLogger {
+  const mockLogger: MockLogger = {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+  
+  // Add child method that returns a new mock logger
+  mockLogger.child = jest.fn(() => createMockLogger());
+  
+  return mockLogger;
+}
+
+/**
  * Creates a promise that resolves after the specified number of milliseconds
  */
 export function sleep(ms: number): Promise<void> {
@@ -50,7 +76,6 @@ export function sleep(ms: number): Promise<void> {
 
 /**
  * Mocks the Date.now() function to always return a fixed timestamp
- * @returns A function to restore the original Date.now()
  */
 export function mockDateNow(timestamp: number): () => void {
   const originalDateNow = Date.now;
@@ -58,22 +83,8 @@ export function mockDateNow(timestamp: number): () => void {
   
   global.Date.now = mockDateNow as any;
   
-  // Return a function to restore the original Date.now
   return () => {
     global.Date.now = originalDateNow;
-  };
-}
-
-/**
- * Creates a mock logger for testing
- */
-export function createMockLogger(): jest.Mocked<Logger> {
-  return {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    child: jest.fn(() => createMockLogger()),
   };
 }
 
@@ -127,10 +138,11 @@ export function expectCalledWithPartial(
   expect(callArgs).toBeDefined();
   
   // Find the first object argument that contains all the expected properties
-  const matchingArg = callArgs.find(arg => 
-    arg && typeof arg === 'object' && 
+  const matchingArg = callArgs.find((arg: any) => 
+    arg && 
+    typeof arg === 'object' && 
     Object.entries(partial).every(([key, value]) => {
-      return JSON.stringify(arg[key]) === JSON.stringify(value);
+      return JSON.stringify((arg as any)[key]) === JSON.stringify(value);
     })
   );
   
