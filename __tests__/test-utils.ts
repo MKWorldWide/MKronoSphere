@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
+import { Logger } from '../integrations/shared/types';
 
+// Type for mocked class instances
 type MockedClass<T> = {
   [K in keyof T]: T[K] extends (...args: any[]) => any ? jest.Mock : T[K];
 };
@@ -9,7 +11,7 @@ type MockedClass<T> = {
  */
 export function createMockInstance<T extends new (...args: any[]) => any>(
   constructor: T,
-  mockImpl?: Partial<InstanceType<T>>,
+  mockImpl: Partial<InstanceType<T>> = {}
 ): MockedClass<InstanceType<T>> {
   const mockObj: any = {};
   const instance = new constructor({} as any);
@@ -18,24 +20,23 @@ export function createMockInstance<T extends new (...args: any[]) => any>(
   let current = instance;
   do {
     Object.getOwnPropertyNames(current)
-      .filter(prop => typeof (instance as any)[prop] === 'function' && prop !== 'constructor')
-      .forEach(method => {
-        if (!mockObj[method]) {
-          mockObj[method] = jest.fn();
+      .concat(Object.getOwnPropertySymbols(current).map(s => s.toString()))
+      .filter(prop => {
+        const descriptor = Object.getOwnPropertyDescriptor(current, prop);
+        return descriptor && typeof descriptor.value === 'function' && prop !== 'constructor';
+      })
+      .forEach(prop => {
+        if (!mockObj[prop]) {
+          mockObj[prop] = jest.fn();
         }
       });
-  } while ((current = Object.getPrototypeOf(current)) && Object.getPrototypeOf(current));
+    current = Object.getPrototypeOf(current);
+  } while (current && current !== Object.prototype);
 
-  // Apply any custom mock implementations
-  if (mockImpl) {
-    Object.entries(mockImpl).forEach(([key, value]) => {
-      if (typeof value === 'function') {
-        mockObj[key] = jest.fn(value as any);
-      } else {
-        mockObj[key] = value;
-      }
-    });
-  }
+  // Apply any mock implementations
+  Object.entries(mockImpl).forEach(([key, value]) => {
+    mockObj[key] = typeof value === 'function' ? jest.fn(value) : value;
+  });
 
   return mockObj as MockedClass<InstanceType<T>>;
 }
@@ -44,31 +45,35 @@ export function createMockInstance<T extends new (...args: any[]) => any>(
  * Creates a promise that resolves after the specified number of milliseconds
  */
 export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => global.setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
  * Mocks the Date.now() function to always return a fixed timestamp
+ * @returns A function to restore the original Date.now()
  */
 export function mockDateNow(timestamp: number): () => void {
   const originalDateNow = Date.now;
-  (global.Date as any).now = jest.fn(() => timestamp);
+  const mockDateNow = () => timestamp;
   
+  global.Date.now = mockDateNow as any;
+  
+  // Return a function to restore the original Date.now
   return () => {
-    (global.Date as any).now = originalDateNow;
+    global.Date.now = originalDateNow;
   };
 }
 
 /**
  * Creates a mock logger for testing
  */
-export function createMockLogger() {
+export function createMockLogger(): jest.Mocked<Logger> {
   return {
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-    child: jest.fn().mockImplementation(() => createMockLogger()),
+    child: jest.fn(() => createMockLogger()),
   };
 }
 
@@ -77,18 +82,21 @@ export function createMockLogger() {
  */
 export async function expectAsyncError(
   fn: () => Promise<any>,
-  errorMessage?: string | RegExp,
+  errorMessage?: string | RegExp
 ): Promise<void> {
-  let error: Error | undefined;
+  let error: Error | null = null;
+  
   try {
     await fn();
   } catch (err) {
     error = err as Error;
   }
   
-  expect(error).toBeDefined();
+  if (!error) {
+    throw new Error('Expected function to throw an error, but it did not');
+  }
   
-  if (errorMessage && error) {
+  if (errorMessage) {
     if (typeof errorMessage === 'string') {
       expect(error.message).toContain(errorMessage);
     } else {
@@ -110,18 +118,26 @@ export function expectCalledWith(fn: jest.Mock, ...args: any[]): void {
 export function expectCalledWithPartial(
   fn: jest.Mock,
   index: number,
-  partial: Record<string, any>,
+  partial: Record<string, any>
 ): void {
   const calls = fn.mock.calls;
   expect(calls.length).toBeGreaterThan(index);
   
   const callArgs = calls[index];
-  expect(callArgs).toEqual(
-    expect.arrayContaining([expect.objectContaining(partial)])
+  expect(callArgs).toBeDefined();
+  
+  // Find the first object argument that contains all the expected properties
+  const matchingArg = callArgs.find(arg => 
+    arg && typeof arg === 'object' && 
+    Object.entries(partial).every(([key, value]) => {
+      return JSON.stringify(arg[key]) === JSON.stringify(value);
+    })
   );
+  
+  expect(matchingArg).toBeDefined();
 }
 
-// Add global Jest types
+// Add global Jest matchers
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace jest {
@@ -130,3 +146,32 @@ declare global {
     }
   }
 }
+
+// Add custom matchers
+expect.extend({
+  toBeCalledWithPartial(received, partial) {
+    const calls = (received as jest.Mock).mock.calls;
+    
+    const pass = calls.some(callArgs => 
+      callArgs.some((arg: any) => 
+        arg && 
+        typeof arg === 'object' && 
+        Object.entries(partial).every(([key, value]) => 
+          JSON.stringify(arg[key]) === JSON.stringify(value)
+        )
+      )
+    );
+    
+    if (pass) {
+      return {
+        message: () => `expected function not to be called with an object containing ${JSON.stringify(partial)}`,
+        pass: true,
+      };
+    } else {
+      return {
+        message: () => `expected function to be called with an object containing ${JSON.stringify(partial)}`,
+        pass: false,
+      };
+    }
+  },
+});

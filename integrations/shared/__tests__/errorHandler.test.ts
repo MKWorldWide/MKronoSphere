@@ -1,146 +1,122 @@
-import { errorHandler } from '../errorHandler';
+import { ErrorHandler } from '../errorHandler';
 import { createMockLogger } from '../../../../__tests__/test-utils';
 
-describe('errorHandler', () => {
+describe('ErrorHandler', () => {
+  let errorHandler: ErrorHandler;
   let mockLogger: ReturnType<typeof createMockLogger>;
   
   beforeEach(() => {
     mockLogger = createMockLogger();
-    jest.clearAllMocks();
+    errorHandler = new ErrorHandler('TestHandler');
+    // Override the logger for testing
+    (errorHandler as any).logger = mockLogger;
   });
 
-  it('should log error with context and rethrow by default', () => {
+  it('should log error with context', () => {
     const error = new Error('Test error');
     const context = { userId: '123', action: 'testAction' };
     
-    const wrappedHandler = errorHandler(mockLogger as any);
-    const testFn = () => {
-      throw error;
-    };
-    
-    expect(() => wrappedHandler(testFn, { context })()).toThrow(error);
+    errorHandler.handleError(error, context);
     
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in testFn',
+      'Error in TestHandler',
       expect.objectContaining({
-        error,
-        context,
-      })
-    );
-  });
-
-  it('should not rethrow if shouldRethrow is false', () => {
-    const error = new Error('Test error');
-    const wrappedHandler = errorHandler(mockLogger as any);
-    
-    const testFn = () => {
-      throw error;
-    };
-    
-    expect(() => wrappedHandler(testFn, { shouldRethrow: false })()).not.toThrow();
-    expect(mockLogger.error).toHaveBeenCalled();
-  });
-
-  it('should work with async functions', async () => {
-    const error = new Error('Async error');
-    const wrappedHandler = errorHandler(mockLogger as any);
-    
-    const asyncFn = async () => {
-      throw error;
-    };
-    
-    await expect(wrappedHandler(asyncFn)()).rejects.toThrow(error);
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in asyncFn',
-      expect.objectContaining({ error })
-    );
-  });
-
-  it('should include custom error message if provided', () => {
-    const error = new Error('Test error');
-    const wrappedHandler = errorHandler(mockLogger as any);
-    
-    const testFn = () => {
-      throw error;
-    };
-    
-    expect(() => wrappedHandler(testFn, { errorMessage: 'Custom error message' })()).toThrow(error);
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Custom error message',
-      expect.any(Object)
-    );
-  });
-
-  it('should include additional data in the log', () => {
-    const error = new Error('Test error');
-    const additionalData = { key: 'value', count: 42 };
-    const wrappedHandler = errorHandler(mockLogger as any);
-    
-    const testFn = () => {
-      throw error;
-    };
-    
-    expect(() => wrappedHandler(testFn, { additionalData })()).toThrow(error);
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in testFn',
-      expect.objectContaining({
-        error,
-        additionalData,
+        error: expect.any(Error),
+        context: expect.objectContaining({
+          userId: '123',
+          action: 'testAction'
+        })
       })
     );
   });
 
   it('should handle non-Error objects', () => {
-    const nonError = 'This is not an Error object';
-    const wrappedHandler = errorHandler(mockLogger as any);
+    const nonError = 'Not an error object';
     
-    const testFn = () => {
-      throw nonError;
-    };
+    errorHandler.handleError(nonError as any);
     
-    expect(() => wrappedHandler(testFn)()).toThrow(nonError);
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in testFn',
+      'Error in TestHandler',
       expect.objectContaining({
         error: expect.any(Error),
-        originalError: nonError,
+        originalValue: nonError
       })
     );
   });
 
-  it('should handle null or undefined errors', () => {
-    const wrappedHandler = errorHandler(mockLogger as any);
+  it('should handle undefined error', () => {
+    errorHandler.handleError(undefined as any);
     
-    const testFn = () => {
-      // @ts-ignore - Testing runtime behavior
-      throw null;
-    };
-    
-    expect(() => wrappedHandler(testFn)()).toThrow();
     expect(mockLogger.error).toHaveBeenCalledWith(
-      'Error in testFn',
+      'Error in TestHandler',
       expect.objectContaining({
         error: expect.any(Error),
-        originalError: null,
+        originalValue: undefined
       })
     );
   });
 
-  it('should pass through successful results', () => {
-    const wrappedHandler = errorHandler(mockLogger as any);
-    const testFn = () => 'success';
+  it('should handle null error', () => {
+    errorHandler.handleError(null as any);
     
-    const result = wrappedHandler(testFn)();
-    expect(result).toBe('success');
-    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Error in TestHandler',
+      expect.objectContaining({
+        error: expect.any(Error),
+        originalValue: null
+      })
+    );
   });
 
-  it('should pass through successful async results', async () => {
-    const wrappedHandler = errorHandler(mockLogger as any);
-    const testFn = async () => 'async success';
+  it('should sanitize context by removing circular references', () => {
+    const error = new Error('Test error');
+    const circularObj: any = { name: 'test' };
+    circularObj.self = circularObj; // Create circular reference
     
-    const result = await wrappedHandler(testFn)();
-    expect(result).toBe('async success');
-    expect(mockLogger.error).not.toHaveBeenCalled();
+    errorHandler.handleError(error, { circularObj });
+    
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Error in TestHandler',
+      expect.objectContaining({
+        error: expect.any(Error),
+        context: {
+          circularObj: {
+            name: 'test',
+            self: '[Circular]'
+          }
+        }
+      })
+    );
+  });
+
+  it('should include stack trace in development mode', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    
+    const error = new Error('Test error');
+    errorHandler.handleError(error);
+    
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      'Error in TestHandler',
+      expect.objectContaining({
+        error: expect.any(Error),
+        stack: expect.stringContaining('Error: Test error')
+      })
+    );
+    
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  it('should not include stack trace in production', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    
+    const error = new Error('Test error');
+    errorHandler.handleError(error);
+    
+    const call = (mockLogger.error as jest.Mock).mock.calls[0][1];
+    expect(call).not.toHaveProperty('stack');
+    
+    process.env.NODE_ENV = originalNodeEnv;
   });
 });

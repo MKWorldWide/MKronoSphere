@@ -1,170 +1,126 @@
 import { BaseIntegration } from '../BaseIntegration';
 import { createMockLogger, expectAsyncError } from '../../../../__tests__/test-utils';
+import { IntegrationConfig, IntegrationEvent } from '../types';
 
 describe('BaseIntegration', () => {
-  class TestIntegration extends BaseIntegration {
+  // Define a test config type that extends IntegrationConfig
+  interface TestConfig extends IntegrationConfig {
+    apiUrl: string;
+    apiKey: string;
+    timeout?: number;
+  }
+
+  // Create a test event type
+  type TestEvent = {
+    id: string;
+    type: string;
+    data: any;
+  };
+
+  // Test implementation of BaseIntegration
+  class TestIntegration extends BaseIntegration<TestConfig, TestEvent> {
+    private isConnected: boolean = false;
+
+    constructor(config: TestConfig, logger?: any) {
+      super(config, logger);
+    }
+
     async connect(): Promise<void> {
+      if (this.isConnected) {
+        throw new Error('Already connected');
+      }
       this.logger.info('Connecting to test integration');
+      // Simulate connection delay
+      await new Promise(resolve => setTimeout(resolve, 10));
+      this.isConnected = true;
     }
 
     async disconnect(): Promise<void> {
+      if (!this.isConnected) {
+        throw new Error('Not connected');
+      }
       this.logger.info('Disconnecting from test integration');
+      this.isConnected = false;
     }
 
     async testMethod(): Promise<string> {
+      await this.ensureConnected();
       return 'test-result';
+    }
+
+    async emitTestEvent(event: TestEvent): Promise<void> {
+      const integrationEvent: IntegrationEvent<TestEvent> = {
+        timestamp: new Date(),
+        source: 'test',
+        data: event,
+        metadata: {}
+      };
+      this.emitEvent(integrationEvent);
     }
   }
 
   let integration: TestIntegration;
   let mockLogger: ReturnType<typeof createMockLogger>;
+  const testConfig: TestConfig = {
+    apiUrl: 'https://api.example.com',
+    apiKey: 'test-api-key',
+    name: 'test-integration',
+    version: '1.0.0'
+  };
 
   beforeEach(() => {
     mockLogger = createMockLogger();
-    integration = new TestIntegration({
-      name: 'test-integration',
-      logger: mockLogger as any,
-    });
-  });
-
-  afterEach(() => {
+    integration = new TestIntegration(testConfig, mockLogger);
     jest.clearAllMocks();
   });
 
   describe('constructor', () => {
-    it('should initialize with the provided name', () => {
-      expect(integration.name).toBe('test-integration');
-    });
-
-    it('should initialize with the provided logger', () => {
+    it('should initialize with provided config and logger', () => {
+      expect(integration['config']).toEqual(testConfig);
       expect(integration['logger']).toBe(mockLogger);
     });
 
-    it('should initialize with default options if not provided', () => {
-      expect(integration['options']).toEqual({
-        autoConnect: true,
-        reconnect: true,
-        maxRetries: 3,
-        retryDelay: 1000,
-      });
-    });
-
-    it('should override default options with provided options', () => {
-      const customIntegration = new TestIntegration({
-        name: 'custom-integration',
-        logger: mockLogger as any,
-        options: {
-          autoConnect: false,
-          maxRetries: 5,
-        },
-      });
-
-      expect(customIntegration['options']).toEqual({
-        autoConnect: false,
-        reconnect: true,
-        maxRetries: 5,
-        retryDelay: 1000,
-      });
+    it('should use default logger if none provided', () => {
+      const defaultIntegration = new TestIntegration(testConfig);
+      expect(defaultIntegration['logger']).toBeDefined();
     });
   });
 
   describe('connect', () => {
-    it('should call the implementation connect method', async () => {
-      const connectSpy = jest.spyOn(integration as any, 'connect');
-      await integration.connect();
-      expect(connectSpy).toHaveBeenCalled();
-    });
-
-    it('should log connection attempt', async () => {
+    it('should connect successfully', async () => {
       await integration.connect();
       expect(mockLogger.info).toHaveBeenCalledWith('Connecting to test integration');
     });
 
-    it('should set isConnected to true on successful connection', async () => {
-      expect(integration.isConnected).toBe(false);
+    it('should throw if already connected', async () => {
       await integration.connect();
-      expect(integration.isConnected).toBe(true);
-    });
-
-    it('should throw an error if already connected', async () => {
-      await integration.connect();
-      await expectAsyncError(
-        () => integration.connect(),
-        'Already connected to test-integration'
-      );
-    });
-
-    it('should retry on failure if maxRetries > 0', async () => {
-      const failingIntegration = new TestIntegration({
-        name: 'failing-integration',
-        logger: mockLogger as any,
-        options: {
-          maxRetries: 2,
-          retryDelay: 10,
-        },
-      });
-
-      // Make the connect method fail twice before succeeding
-      let callCount = 0;
-      const originalConnect = failingIntegration['connect'].bind(failingIntegration);
-      jest.spyOn(failingIntegration as any, 'connect').mockImplementation(async () => {
-        callCount++;
-        if (callCount <= 2) {
-          throw new Error('Connection failed');
-        }
-        return originalConnect();
-      });
-
-      await failingIntegration.connect();
-      expect(callCount).toBe(3); // Initial attempt + 2 retries
-      expect(mockLogger.warn).toHaveBeenCalledTimes(2); // Should log retry warnings
-      expect(failingIntegration.isConnected).toBe(true);
+      await expect(integration.connect()).rejects.toThrow('Already connected');
     });
   });
 
   describe('disconnect', () => {
-    beforeEach(async () => {
+    it('should disconnect successfully', async () => {
       await integration.connect();
-      jest.clearAllMocks();
-    });
-
-    it('should call the implementation disconnect method', async () => {
-      const disconnectSpy = jest.spyOn(integration as any, 'disconnect');
-      await integration.disconnect();
-      expect(disconnectSpy).toHaveBeenCalled();
-    });
-
-    it('should log disconnection', async () => {
       await integration.disconnect();
       expect(mockLogger.info).toHaveBeenCalledWith('Disconnecting from test integration');
     });
 
-    it('should set isConnected to false after disconnection', async () => {
-      expect(integration.isConnected).toBe(true);
-      await integration.disconnect();
-      expect(integration.isConnected).toBe(false);
-    });
-
-    it('should throw an error if not connected', async () => {
-      await integration.disconnect();
-      await expectAsyncError(
-        () => integration.disconnect(),
-        'Not connected to test-integration'
-      );
+    it('should throw if not connected', async () => {
+      await expect(integration.disconnect()).rejects.toThrow('Not connected');
     });
   });
 
   describe('ensureConnected', () => {
-    it('should not throw if connected', async () => {
-      await integration.connect();
-      await expect(integration['ensureConnected']()).resolves.not.toThrow();
+    it('should connect if not already connected', async () => {
+      await integration['ensureConnected']();
+      expect(mockLogger.info).toHaveBeenCalledWith('Connecting to test integration');
     });
 
-    it('should throw if not connected', async () => {
-      await expectAsyncError(
-        () => integration['ensureConnected'](),
-        'Not connected to test-integration'
-      );
+    it('should not connect if already connected', async () => {
+      await integration.connect();
+      jest.clearAllMocks();
+      await integration['ensureConnected']();
+      expect(mockLogger.info).not.toHaveBeenCalled();
     });
   });
 
@@ -175,42 +131,84 @@ describe('BaseIntegration', () => {
       
       expect(callback).toHaveBeenCalled();
       expect(result).toBe('test-result');
+      expect(mockLogger.info).toHaveBeenCalledWith('Connecting to test integration');
     });
 
-    it('should automatically connect if autoConnect is true', async () => {
-      const autoConnectIntegration = new TestIntegration({
-        name: 'auto-connect',
-        logger: mockLogger as any,
-        options: {
-          autoConnect: true,
-        },
-      });
-
-      const callback = jest.fn().mockResolvedValue('auto-connected');
-      const result = await autoConnectIntegration['withConnection'](callback);
+    it('should handle errors in the callback', async () => {
+      const error = new Error('Test error');
+      const callback = jest.fn().mockRejectedValue(error);
       
-      expect(autoConnectIntegration.isConnected).toBe(true);
+      await expect(integration['withConnection'](callback)).rejects.toThrow(error);
+      expect(mockLogger.error).toHaveBeenCalled();
+    });
+
+    it('should ensure connection before executing callback', async () => {
+      const callback = jest.fn().mockResolvedValue('test-result');
+      await integration['withConnection'](callback);
+      
+      expect(mockLogger.info).toHaveBeenCalledWith('Connecting to test integration');
       expect(callback).toHaveBeenCalled();
-      expect(result).toBe('auto-connected');
+    });
+  });
+
+  describe('event handling', () => {
+    it('should register and emit events', async () => {
+      const eventHandler = jest.fn();
+      integration.onEvent(eventHandler);
+      
+      const testEvent = {
+        id: '123',
+        type: 'test',
+        data: { key: 'value' }
+      };
+      
+      await integration.emitTestEvent(testEvent);
+      
+      expect(eventHandler).toHaveBeenCalledWith(expect.objectContaining({
+        data: testEvent
+      }));
     });
 
-    it('should throw if not connected and autoConnect is false', async () => {
-      const noAutoConnect = new TestIntegration({
-        name: 'no-auto-connect',
-        logger: mockLogger as any,
-        options: {
-          autoConnect: false,
-        },
-      });
-
-      const callback = jest.fn().mockResolvedValue('should-not-call');
+    it('should handle errors in event handlers', async () => {
+      const error = new Error('Event handler error');
+      const errorHandler = jest.fn();
       
-      await expectAsyncError(
-        () => noAutoConnect['withConnection'](callback),
-        'Not connected to no-auto-connect'
+      integration.onEvent(() => { throw error; });
+      integration.onEvent(errorHandler); // This should still be called
+      
+      await integration.emitTestEvent({ id: '123', type: 'test', data: {} });
+      
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Error in event handler',
+        expect.any(Object)
       );
+      expect(errorHandler).toHaveBeenCalled();
+    });
+  });
+
+  describe('error handling', () => {
+    it('should use the provided error handler', async () => {
+      const mockErrorHandler = {
+        handleError: jest.fn()
+      };
       
-      expect(callback).not.toHaveBeenCalled();
+      integration['errorHandler'] = mockErrorHandler as any;
+      
+      const error = new Error('Test error');
+      try {
+        await integration['withConnection'](() => { throw error; });
+      } catch (e) {
+        // Expected
+      }
+      
+      expect(mockErrorHandler.handleError).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({
+          context: expect.objectContaining({
+            method: 'withConnection'
+          })
+        })
+      );
     });
   });
 });

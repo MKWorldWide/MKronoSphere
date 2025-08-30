@@ -1,57 +1,61 @@
 {
   "name": "mkronosphere",
   "version": "1.0.0",
-  "description": "MKronoSphere - A TypeScript-based integration framework",
+  "description": "MKronoSphere - A powerful integration framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"**/*.{ts,md,json}\"",
-    "prepare": "husky install",
+    "build:watch": "tsc --watch",
+    "test": "jest --config jest.config.js",
+    "test:watch": "jest --watch --config jest.config.js",
+    "test:coverage": "jest --coverage --config jest.config.js",
+    "lint": "eslint 'src/**/*.ts' '**/*.ts' --fix",
+    "format": "prettier --write '**/*.{ts,js,json,md}'",
     "docs:build": "mkdocs build",
     "docs:serve": "mkdocs serve",
     "dev": "tsc -w",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prepare": "husky install"
   },
   "dependencies": {
-    "@types/node": "^20.11.17",
-    "typescript": "^5.3.3",
-    "winston": "^3.11.0"
+    "winston": "^3.3.3"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@typescript-eslint/eslint-plugin": "^6.19.1",
-    "@typescript-eslint/parser": "^6.19.1",
-    "eslint": "^8.56.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-jest": "^27.6.0",
-    "eslint-plugin-prettier": "^5.0.0",
+    "@babel/core": "^7.16.0",
+    "@babel/preset-env": "^7.16.0",
+    "@babel/preset-typescript": "^7.16.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "babel-jest": "^29.5.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^8.0.0",
+    "eslint-plugin-import": "^2.25.0",
+    "eslint-plugin-jest": "^27.0.0",
+    "eslint-plugin-prettier": "^4.0.0",
     "husky": "^9.0.11",
-    "jest": "^29.7.0",
+    "jest": "^29.5.0",
     "lint-staged": "^15.0.0",
-    "prettier": "^3.2.4",
+    "prettier": "^2.5.0",
     "rimraf": "^5.0.0",
-    "ts-jest": "^29.1.2",
-    "ts-node": "^10.9.0"
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=14.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/MKWorldWide/MKronoSphere.git"
   },
   "keywords": [
-    "typescript",
     "integration",
     "framework",
-    "temporal",
-    "gamedin",
-    "divina-l3"
+    "typescript",
+    "nodejs"
   ],
   "author": "MK Worldwide",
   "license": "MIT",
@@ -59,6 +63,28 @@
     "url": "https://github.com/MKWorldWide/MKronoSphere/issues"
   },
   "homepage": "https://github.com/MKWorldWide/MKronoSphere#readme",
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!**/node_modules/**",
+      "!**/dist/**"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "json",
+      "lcov",
+      "text",
+      "clover"
+    ]
+  },
   "lint-staged": {
     "*.ts": [
       "eslint --fix",
