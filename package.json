@@ -1,0 +1,68 @@
+{
+  "name": "mkronosphere",
+  "version": "0.1.0",
+  "description": "Temporal integration orchestrator for GameDin and Divina L3 ecosystems",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -w",
+    "clean": "rimraf dist",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.{ts,md,json}\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepare": "husky install",
+    "docs:build": "mkdocs build",
+    "docs:serve": "mkdocs serve"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MKWorldWide/MKronoSphere.git"
+  },
+  "keywords": [
+    "temporal",
+    "integration",
+    "gamedin",
+    "divina-l3",
+    "typescript"
+  ],
+  "author": "MKWorldWide",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MKWorldWide/MKronoSphere/issues"
+  },
+  "homepage": "https://github.com/MKWorldWide/MKronoSphere#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "husky": "^8.0.0",
+    "jest": "^29.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.9.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{md,json}": [
+      "prettier --write"
+    ]
+  }
+}
